@@ -1,0 +1,29 @@
+version: '3.2'
+services:
+  mysql:
+    extends:
+      file: mysql/docker-compose.yml
+      service: mysql
+    networks:
+      - shoppping-list-net
+  airflow:
+    extends:
+      file: airflow/docker-compose.yml
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - ./data:/tmp/data
+  scrapers:
+    extends:
+      file: scrapers/docker-compose.yml
+      service: scrapers
+    networks:
+      - shoppping-list-net
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      airflow:
+        condition: service_healthy

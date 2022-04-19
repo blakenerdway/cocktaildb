@@ -1,0 +1,15 @@
+version: "3.2"
+services:
+  cocktaildb_api:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      - ../data/temp:/tmp/data
+      - .:/app
+    networks:
+      - cocktaildb-network
+
+networks:
+  cocktaildb-network:
+    external: true
