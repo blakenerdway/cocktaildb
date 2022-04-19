@@ -36,10 +36,7 @@ are no duplicates being stored in the database.
 ### Architecture
 For this example, the pipeline focuses on Airflow to call the proper endpoints at TheCocktailDB, and calls custom 
 "microservices" hosted by Flask in another Docker container. In actual production scenario, a data lake could be used to
-trigger different services to work, rather than have the onus on Airflow to call these endpoints to do the work. 
-
-###
-
+trigger different services to work, rather than have the onus on Airflow to call these endpoints to do the work.
 
 
 ## Future work
