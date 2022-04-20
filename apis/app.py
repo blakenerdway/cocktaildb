@@ -46,7 +46,7 @@ def write_csv(orig_file_loc: str, type_prefix: str, data_dict: list, keys: list)
 
 
 def store_csv_to_db(file_loc: str, db_table: str) -> str:
-    query = f"LOAD DATA INFILE '{file_loc}' INTO TABLE {db_table} FIELDS TERMINATED BY ',' " \
+    query = f"LOAD DATA INFILE '{file_loc}' IGNORE INTO TABLE {db_table} FIELDS TERMINATED BY ',' " \
             f"OPTIONALLY ENCLOSED BY '\"' LINES TERMINATED BY '\\n' IGNORE 1 LINES;"
     logging.info(query)
     conn = MySQLdb.connect(host="mysql",

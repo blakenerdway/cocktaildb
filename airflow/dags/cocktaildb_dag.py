@@ -266,6 +266,11 @@ def backup_files(ti):
     os.remove(drinks_file)
 
 
+def delete_tmp_files():
+    # If this fails, it will raise an error and the task will fail so we'll know about it
+    shutil.rmtree('/tmp/data/*', ignore_errors=False)
+
+
 with DAG('cocktaildb', default_args=default_args,
          description="Automate pulls from cocktailDB",
          schedule_interval=timedelta(days=1),
@@ -420,4 +425,11 @@ with DAG('cocktaildb', default_args=default_args,
 
     t14.doc_md = """Store the filtered ingredients and drinks files in the database"""
 
-    t1 >> t2 >> t3 >> t4 >> [tg1, tg2] >> t12 >> t13 >> t14
+    t15 = PythonOperator(
+        task_id='delete_files',
+        python_callable=delete_tmp_files
+    )
+
+    t15.doc_md = """Delete the files in the tmp directory"""
+
+    t1 >> t2 >> t3 >> t4 >> [tg1, tg2] >> t12 >> t13 >> t14 >> t15
