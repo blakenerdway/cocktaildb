@@ -1,3 +1,3 @@
 #!/bin/bash
 
-docker network create shopping-list-net
+docker network create cocktaildb-network
