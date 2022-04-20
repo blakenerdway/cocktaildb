@@ -14,6 +14,11 @@ required_fields = {"idDrink", "strDrink", "strTags", "strCategory", "strGlass", 
 
 
 def remove_accents(old):
+    """
+    Basically normalizes ingredients by removing the accents. In general capitalization shouldn't matter that much
+    :param old: Old string
+    :return: String without any accent letters
+    """
     new = old.lower()
     new = re.sub(r'[àáâãäå]', 'a', new)
     new = re.sub(r'[èéêë]', 'e', new)
@@ -23,7 +28,13 @@ def remove_accents(old):
     return new
 
 
-def read_file(file_loc: str) -> dict:
+def read_json_file(file_loc: str) -> dict:
+    """
+    Reads a json file and returns it.
+    :raises FileNotFoundError
+    :param file_loc: Location of the file (can be absolute or relative, but it must exist)
+    :return: Dictionary object resulting from reading the file
+    """
     logging.info(f'Attempting to read file: {file_loc}...')
     if not os.path.exists(file_loc):
         raise FileNotFoundError
@@ -35,6 +46,14 @@ def read_file(file_loc: str) -> dict:
 
 
 def write_csv(orig_file_loc: str, type_prefix: str, data_dict: list, keys: list) -> str:
+    """
+    Writes a list of dictionaries as a CSV file
+    :param orig_file_loc: Original location to be extracted out so that the folder path can remain the same
+    :param type_prefix: Prefix denoting what type of data this is
+    :param data_dict: Dictionary to write
+    :param keys: Header row as list
+    :return: Path of the file that was written
+    """
     write_file = os.path.join(os.path.dirname(orig_file_loc), f"{type_prefix}_load_{uuid.uuid4()}.csv")
 
     with open(write_file, 'w', encoding='utf-8', newline='') as output_file:
@@ -46,6 +65,12 @@ def write_csv(orig_file_loc: str, type_prefix: str, data_dict: list, keys: list)
 
 
 def store_csv_to_db(file_loc: str, db_table: str) -> str:
+    """
+    Uses LOAD DATA INFILE in MySQL to load a CSV file into a table
+    :param file_loc: Path to the CSV file
+    :param db_table: Database table to load into
+    :return: The output of the query engine
+    """
     query = f"LOAD DATA INFILE '{file_loc}' IGNORE INTO TABLE {db_table} FIELDS TERMINATED BY ',' " \
             f"OPTIONALLY ENCLOSED BY '\"' LINES TERMINATED BY '\\n' IGNORE 1 LINES;"
     logging.info(query)
@@ -65,6 +90,10 @@ def store_csv_to_db(file_loc: str, db_table: str) -> str:
 
 @app.route("/drinks/validate", methods=['POST'])
 def validate_drinks():
+    """
+    Validate the drink file schema
+    :return:
+    """
     logging.info(f'Validating drinks')
     request_json = request.json
     if request_json is None or 'drink_file' not in request_json:
@@ -72,7 +101,7 @@ def validate_drinks():
 
     file_loc = request_json['drink_file']
     try:
-        all_drinks = read_file(file_loc)
+        all_drinks = read_json_file(file_loc)
     except FileNotFoundError as e:
         return {"status": "fail", "msg": "Drink file does not exist"}, 400
 
@@ -92,6 +121,10 @@ def validate_drinks():
 
 @app.route("/drinks/filter", methods=['POST'])
 def find_new_drinks():
+    """
+    Find only drinks that don't have an entry in our database yet
+    :return:
+    """
     logging.info(f'Filtering for only new drinks')
     request_json = request.json
     if request_json is None or 'drink_file' not in request_json:
@@ -100,7 +133,7 @@ def find_new_drinks():
     file_loc = request_json['drink_file']
     logging.info(request_json)
     try:
-        all_drinks = read_file(file_loc)
+        all_drinks = read_json_file(file_loc)
     except FileNotFoundError as e:
         return {"status": "fail", "msg": "Drink file does not exist"}, 400
 
@@ -135,6 +168,10 @@ def find_new_drinks():
 
 @app.route("/drinks/transform", methods=['POST'])
 def transform_drinks():
+    """
+    Transform the drinks from the JSON file into a CSV file
+    :return:
+    """
     logging.info(f'Transforming drinks')
     request_json = request.json
     if request_json is None or 'drink_file' not in request_json:
@@ -143,7 +180,7 @@ def transform_drinks():
     logging.info(request_json)
     file_loc = request_json['drink_file']
     try:
-        filtered_drinks = read_file(file_loc)
+        filtered_drinks = read_json_file(file_loc)
     except FileNotFoundError as e:
         return {"status": "fail", "msg": "Drink file does not exist"}, 400
 
@@ -178,6 +215,10 @@ def transform_drinks():
 
 @app.route("/drinks/store", methods=['POST'])
 def store_new_drinks():
+    """
+    Store drinks into the database from the CSV file
+    :return:
+    """
     logging.info(f'Storing drinks into database')
     request_json = request.json
     if request_json is None or 'drink_file' not in request_json:
@@ -191,6 +232,10 @@ def store_new_drinks():
 
 @app.route("/ingredients/unique", methods=['POST'])
 def find_unique_ingredients():
+    """
+    Look through the drinks in the JSON file and find unique ingredients without duplications
+    :return:
+    """
     logging.info(f'Returning all unique ingredients')
     request_json = request.json
     if request_json is None or 'drink_file' not in request_json:
@@ -199,7 +244,7 @@ def find_unique_ingredients():
     logging.info(request_json)
     file_loc = request_json['drink_file']
     try:
-        all_drinks = read_file(file_loc)
+        all_drinks = read_json_file(file_loc)
     except FileNotFoundError as e:
         return {"status": "fail", "msg": "Drink file does not exist"}, 400
 
@@ -220,7 +265,11 @@ def find_unique_ingredients():
 
 @app.route("/ingredients/filter", methods=['POST'])
 def filter_new_ingredients():
-    logging.info(f'Returning all unique ingredients')
+    """
+    Find all the new ingredients that don't have an entry in the database yet.
+    :return:
+    """
+    logging.info(f'Returning all new ingredients')
     request_json = request.json
     if request_json is None or 'ingredients_file' not in request_json:
         return {"status": "fail", "msg": "Add a \"ingredients_file\" parameter to specify what file to read"}, 400
@@ -228,7 +277,7 @@ def filter_new_ingredients():
     logging.info(request_json)
     file_loc = request_json['ingredients_file']
     try:
-        all_ingredients = read_file(file_loc)
+        all_ingredients = read_json_file(file_loc)
     except FileNotFoundError as e:
         return {"status": "fail", "msg": "Ingredients file does not exist"}, 400
 
@@ -260,6 +309,10 @@ def filter_new_ingredients():
 
 @app.route("/ingredients/transform", methods=['POST'])
 def transform_ingredients():
+    """
+    Transform the ingredients into a CSV file that can be loaded into the database
+    :return:
+    """
     logging.info(f'Transforming ingredients')
     request_json = request.json
     if request_json is None or  'ingredients_file' not in request_json:
@@ -268,7 +321,7 @@ def transform_ingredients():
     logging.info(request_json)
     file_loc = request_json['ingredients_file']
     try:
-        all_ingredients = read_file(file_loc)
+        all_ingredients = read_json_file(file_loc)
     except FileNotFoundError as e:
         return {"status": "fail", "msg": "Drink file does not exist"}, 400
 
@@ -298,6 +351,10 @@ def transform_ingredients():
 
 @app.route("/ingredients/store", methods=['POST'])
 def store_ingredients():
+    """
+    Take the CSV file and store the contents into the database
+    :return:
+    """
     logging.info(f'Storing ingredients into database')
     request_json = request.json
     if request_json is None or 'ingredients_file' not in request_json:
@@ -311,6 +368,10 @@ def store_ingredients():
 
 @app.route("/drink/link/ingredients/transform", methods=['POST'])
 def link_drinks_to_ingredients():
+    """
+    Read the JSON file and match up any drinks with any ingredients by their ID and store the records in a CSV file
+    :return:
+    """
     logging.info(f'Linking ingredients')
     request_json = request.json
     if request_json is None or 'drink_file' not in request_json:
@@ -319,7 +380,7 @@ def link_drinks_to_ingredients():
 
     file_loc = request_json['drink_file']
     try:
-        all_drinks = read_file(file_loc)
+        all_drinks = read_json_file(file_loc)
     except FileNotFoundError as e:
         return {"status": "fail", "msg": "Drink file does not exist"}, 400
 
@@ -362,6 +423,10 @@ def link_drinks_to_ingredients():
 
 @app.route("/drink/link/ingredients/store", methods=['POST'])
 def store_drinks_to_ingredients_links():
+    """
+    Store the contents of the CSV file into the database
+    :return:
+    """
     logging.info('Storing drink ingredient links')
     request_json = request.json
     if request_json is None or 'link_file' not in request_json:

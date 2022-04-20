@@ -1,11 +1,12 @@
 import shutil
 import time
 from datetime import timedelta, datetime
+from os import listdir
 
 import requests
 from airflow import DAG
 from airflow.exceptions import AirflowFailException, AirflowException
-from airflow.operators.python import PythonOperator, ShortCircuitOperator
+from airflow.operators.python import PythonOperator
 import os
 import json
 
@@ -23,6 +24,14 @@ default_args = {
 
 
 def request_url(method, url, headers=None, data=None):
+    """
+    Used to call a url 5 times just in case it fails the first couple of times. A little redundancy never hurt
+    :param method: "GET", "POST", etc...
+    :param url: url to request
+    :param headers: If there are any headers
+    :param data: The data to put in the request
+    :return: The response or None
+    """
     tries = 1
     while tries < 5:
         try:
@@ -37,6 +46,10 @@ def request_url(method, url, headers=None, data=None):
 
 
 def get_drinks_by_first_letter():
+    """
+    Searches TheCocktailDB for drinks starting with letters: 'a','l','n', and 'r'
+    :return: A list of drinks as a list of dictionary objects
+    """
     drinks = []
     # Get a subset of possible drinks (could search all alphabet and numerics)
     for char in "alnr":
@@ -49,6 +62,11 @@ def get_drinks_by_first_letter():
 
 
 def get_drink_alterations(ti):
+    """
+    Calls the api to get the drink alterations
+    :param ti: Airflow's context variable
+    :return: Location of the file that was written
+    """
     alterations = []
     drinks = ti.xcom_pull(key='return_value', task_ids=['get_all_drinks'])[0]
 
@@ -70,6 +88,10 @@ def get_drink_alterations(ti):
 
 
 def validate_drinks(ti):
+    """
+    Calls the api to validate the schema of the drinks. Task will fail the DAG if the schema wasn't validated properly.
+    :param ti: Airflow's context variable
+    """
     file_loc = ti.xcom_pull(key='return_value', task_ids=['get_drink_alterations'])[0]
     print(file_loc)
 
@@ -83,6 +105,11 @@ def validate_drinks(ti):
 
 
 def filter_new_drinks(ti):
+    """
+    Calls the api to find out which drinks of the ones that were pulled haven't been stored yet.
+    :param ti: Airflow's context variable
+    :return: Location of the file that was written
+    """
     file_loc = ti.xcom_pull(key='return_value', task_ids=['get_drink_alterations'])[0]
     print(file_loc)
 
@@ -102,6 +129,11 @@ def filter_new_drinks(ti):
 
 
 def transform_drinks(ti):
+    """
+    Calls the API with the "filtered" drink file to transform it into a CSV file to be loaded into MySQL
+    :param ti: Airflow's context variable
+    :return: Location of the file that was written
+    """
     file_loc = ti.xcom_pull(key='file_location', task_ids=['filter_drinks'])[0]
     print(file_loc)
 
@@ -120,6 +152,10 @@ def transform_drinks(ti):
 
 
 def store_drinks(ti):
+    """
+    Calls the api to store the drinks from the CSV file
+    :param ti: Airflow's context variable
+    """
     file_loc = ti.xcom_pull(key='return_value', task_ids=['drink_tl.transform_drinks'])[0]
     print(file_loc)
 
@@ -131,6 +167,11 @@ def store_drinks(ti):
 
 
 def get_unique_ingredients(ti):
+    """
+    Calls the api to get unique ingredients from all the drinks
+    :param ti: Airflow's context variable
+    :return: List of ingredients as strings
+    """
     file_loc = ti.xcom_pull(key='file_location', task_ids=['filter_drinks'])[0]
     print(file_loc)
 
@@ -150,6 +191,11 @@ def get_unique_ingredients(ti):
 
 
 def search_ingredients(ti):
+    """
+    Searches TheCocktailDB to find entries for each ingredient string
+    :param ti: Airflow's context variable
+    :return: Location of the file that was written
+    """
     ingredients_strs = ti.xcom_pull(key='return_value', task_ids=['ingredients_tl.get_unique_ingredients'])[0]
     print(ingredients_strs)
 
@@ -176,6 +222,11 @@ def search_ingredients(ti):
 
 
 def filter_ingredients(ti):
+    """
+    Calls the api to find only new ingredients that we haven't stored in the DB yet
+    :param ti: Airflow's context variable
+    :return: Location of the file that was written
+    """
     file_loc = ti.xcom_pull(key='return_value', task_ids=['ingredients_tl.search_ingredients'])[0]
     print(file_loc)
     res = requests.post("http://cocktaildb_api:5000/ingredients/filter", json={"ingredients_file": file_loc})
@@ -193,6 +244,11 @@ def filter_ingredients(ti):
 
 
 def transform_ingredients(ti):
+    """
+    Calls the api to transform the ingredients into a CSV file to be loaded into the DB
+    :param ti: Airflow's context variable
+    :return: Location of the file that was written
+    """
     file_loc = ti.xcom_pull(key='return_value', task_ids=['ingredients_tl.filter_ingredients'])[0]
     print(file_loc)
     res = requests.post("http://cocktaildb_api:5000/ingredients/transform", json={"ingredients_file": file_loc})
@@ -210,6 +266,11 @@ def transform_ingredients(ti):
 
 
 def store_ingredients(ti):
+    """
+    Calls the API to store the CSV file into the database
+    :param ti: Airflow's context variable
+    :return: Location of the file that was written
+    """
     file_loc = ti.xcom_pull(key='return_value', task_ids=['ingredients_tl.transform_ingredients'])[0]
     print(file_loc)
     res = requests.post("http://cocktaildb_api:5000/ingredients/store", json={"ingredients_file": file_loc})
@@ -220,6 +281,11 @@ def store_ingredients(ti):
 
 
 def link_drinks_to_ingredients(ti):
+    """
+    Calls the api to create a CSV file that links drinks to their respective ingredient entries
+    :param ti: Airflow's context variable
+    :return: Location of the file that was written
+    """
     file_loc = ti.xcom_pull(key='return_value', task_ids=['filter_drinks'])[0]
     print(file_loc)
     res = requests.post("http://cocktaildb_api:5000/drink/link/ingredients/transform", json={"drink_file": file_loc})
@@ -237,6 +303,11 @@ def link_drinks_to_ingredients(ti):
 
 
 def store_links(ti):
+    """
+    Calls the api to store the drink link ingredients CSV file in the DB
+    :param ti: Airflow's context variable
+    :return: Location of the file that was written
+    """
     file_loc = ti.xcom_pull(key='return_value', task_ids=['create_links'])[0]
     print(file_loc)
     res = requests.post("http://cocktaildb_api:5000/drink/link/ingredients/store", json={"link_file": file_loc})
@@ -247,8 +318,13 @@ def store_links(ti):
 
 
 def backup_files(ti):
+    """
+    Backs up the filtered json files
+    :param ti: Airflow's context variable
+    :return: Location of the file that was written
+    """
     xcom = ti.xcom_pull(key='return_value',
-                        task_ids=['ingredients_tl.transform_ingredients', 'drink_tl.transform_drinks'])
+                        task_ids=['ingredients_tl.filter_ingredients', 'filter_drinks'])
     ingredients_file = xcom[0]
     drinks_file = xcom[1]
     print(ingredients_file)
@@ -267,8 +343,13 @@ def backup_files(ti):
 
 
 def delete_tmp_files():
-    # If this fails, it will raise an error and the task will fail so we'll know about it
-    shutil.rmtree('/tmp/data/*', ignore_errors=False)
+    """
+    Deletes the data from the tmp folder since we've finished
+    :return: Location of the file that was written
+    """
+    my_path = '/tmp/data/'
+    for file_name in os.listdir(my_path):
+        os.remove(my_path + file_name)
 
 
 with DAG('cocktaildb', default_args=default_args,
