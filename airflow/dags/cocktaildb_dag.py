@@ -247,7 +247,8 @@ def store_links(ti):
 
 
 def backup_files(ti):
-    xcom = ti.xcom_pull(key='return_value', task_ids=['ingredients_tl.transform_ingredients', 'drink_tl.transform_drinks'])
+    xcom = ti.xcom_pull(key='return_value',
+                        task_ids=['ingredients_tl.transform_ingredients', 'drink_tl.transform_drinks'])
     ingredients_file = xcom[0]
     drinks_file = xcom[1]
     print(ingredients_file)
@@ -272,9 +273,13 @@ with DAG('cocktaildb', default_args=default_args,
          catchup=False,
          concurrency=2,
          tags=['example', 'cocktail']) as dag:
-
     dag.doc_md = """
-    Example airflow dag for pulling daily data from "TheCocktailDB" to fulfill project request.
+    # Cocktail DB scraper
+    Example airflow dag for pulling daily data from "TheCocktailDB".
+    ## Notes
+    1. Set up to run daily
+    2. Requires mysql docker container
+    3. Requires cocktaildb_api container
     """
 
     t1 = PythonOperator(
@@ -282,20 +287,44 @@ with DAG('cocktaildb', default_args=default_args,
         python_callable=get_drinks_by_first_letter
     )
 
+    t1.doc_md = """
+    Call TheCocktailDB API to get drinks that start with a specific letter. Letters are hardcoded for now.
+    
+    *Xcom*:
+    
+    - key: 'return_value'
+    - value: list
+        - Returns a list of json objects (dict)  
+    """
+
     t2 = PythonOperator(
         task_id='get_drink_alterations',
         python_callable=get_drink_alterations
     )
+
+    t2.doc_md = """
+    Call TheCocktailDB API to get alterations of drinks. Pulls 'return_value' from the task: `get_all_drinks`.
+    """
 
     t3 = PythonOperator(
         task_id='validate_drinks',
         python_callable=validate_drinks
     )
 
+    t3.doc_md = """
+    Call our API to validate the schema of the drinks. Pulls 'return_value' from the task: `get_drink_alterations`.
+    Fails the DAG if this task fails.
+    """
+
     t4 = PythonOperator(
         task_id='filter_drinks',
         python_callable=filter_new_drinks
     )
+
+    t4.doc_md = """
+    Call the API to find only new drinks that aren't currently in the database. Uses the return value from the 
+    `get_drink_alterations` task for the file location.
+    """
 
     # Task group for working with drinks
     with TaskGroup(group_id='drink_tl') as tg1:
@@ -303,10 +332,19 @@ with DAG('cocktaildb', default_args=default_args,
             task_id='transform_drinks',
             python_callable=transform_drinks
         )
+
+        t5.doc_md = """
+        Call the API to read the JSON data of new drinks and turn it into records in the format for the MySQL database.
+        """
+
         t6 = PythonOperator(
             task_id='store_drinks',
             python_callable=store_drinks
         )
+
+        t6.doc_md = """
+        Call the API to read a CSV file that has drink records.
+        """
 
         t5 >> t6
 
@@ -316,22 +354,44 @@ with DAG('cocktaildb', default_args=default_args,
             task_id='get_unique_ingredients',
             python_callable=get_unique_ingredients
         )
+
+        t7.doc_md = """
+        Call the API to read the ingredients from the `filter_drinks` return value file and get only unique (no need to
+        search for ingredients twice)
+        """
         t8 = PythonOperator(
             task_id='search_ingredients',
             python_callable=search_ingredients
         )
+
+        t8.doc_md = """
+        Search TheCocktailDB for the ingredients returned by the API
+        """
         t9 = PythonOperator(
             task_id='filter_ingredients',
             python_callable=filter_ingredients
         )
+
+        t9.doc_md = """
+        Call the API to filter returned ingredients to remove duplicates by ID that are already stored in the database
+        """
+
         t10 = PythonOperator(
             task_id='transform_ingredients',
             python_callable=transform_ingredients
         )
+
+        t10.doc_md = """
+        Call the API to read the JSON data of new ingredients and turn it into CSV records for the database.
+        """
         t11 = PythonOperator(
             task_id='store_ingredients',
             python_callable=store_ingredients
         )
+
+        t11.doc_md = """
+        Call the API to read the CSV data and store ingredients into the database
+        """
 
         t7 >> t8 >> t9 >> t10 >> t11
 
@@ -340,14 +400,24 @@ with DAG('cocktaildb', default_args=default_args,
         python_callable=link_drinks_to_ingredients
     )
 
+    t12.doc_md = """
+    Call the API to create drink to ingredient mapping. Stored as a CSV file
+    """
+
     t13 = PythonOperator(
         task_id='store_links',
         python_callable=store_links
     )
 
+    t13.doc_md = """
+    Call the API to store the CSV linking data in the database.
+    """
+
     t14 = PythonOperator(
         task_id='backup_staged_files',
         python_callable=backup_files
     )
+
+    t14.doc_md = """Store the filtered ingredients and drinks files in the database"""
 
     t1 >> t2 >> t3 >> t4 >> [tg1, tg2] >> t12 >> t13 >> t14

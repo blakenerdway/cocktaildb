@@ -40,7 +40,7 @@ version: '3.2'
 x-airflow-common:
   &airflow-common
   build: .
-  image: newsela_cocktaildb/airflow:1.0
+  image: cocktaildb/airflow:1.0
   environment:
     &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: CeleryExecutor
