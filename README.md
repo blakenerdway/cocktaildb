@@ -40,10 +40,10 @@ through the container.
     ```
    SELECT name, LENGTH(instructions) as length 
    FROM drinks 
-   WHERE LENGTH(instructions) > 100 
-   ORDER BY LENGTH(instructions) DESC;
+   WHERE length > 100 
+   ORDER BY length DESC;
     ```
-2) Which drink types have descriptions longer than 100 characters?
+2) Which drink types have descriptions longer than 150 characters?
     ```
     SELECT type, AVG(LENGTH(instructions)) as length
     FROM drinks
